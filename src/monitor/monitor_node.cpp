@@ -36,6 +36,9 @@ typedef nav_msgs::Odometry state_t;
 // Queue size for ROS subscribers
 const size_t QUEUE_SIZE = 1;
 
+// Publisher with safe actions
+static ros::Publisher safe_action_pub;
+
 /* CSV format:
 OLD:
 5 consts:  A B cirTol dirTol xTol yTol
@@ -227,11 +230,18 @@ void cml_exit(void) {
 /**************************/
 
 void stateCallback(const state_t::ConstPtr& msg) {
-    ;
+    double x = msg->pose.pose.position.x;
+    double y = msg->pose.pose.position.y;
+    double z = msg->pose.pose.position.z;
+    // TODO: calculate yaw
+    double x_dot = msg->twist.twist.linear.x;
+    double y_dot = msg->twist.twist.linear.y;
+    double yaw_dot = msg->twist.twist.angular.z;
 }
 
 void actionCallback(const action_t::ConstPtr& msg) {
-    ;
+    double speed = msg->drive.speed;
+    double steering_angle = msg->drive.steering_angle;
 }
 
 int main (int argc, char **argv) {
@@ -239,7 +249,7 @@ int main (int argc, char **argv) {
     // Initialize ROS
     ros::init(argc, argv, "aa_monitor");
     ros::NodeHandle nh;
-    ros::Publisher pub = nh.advertise<action_t>("commands/keyboard",
+    safe_action_pub = nh.advertise<action_t>("commands/keyboard",
             QUEUE_SIZE);
     ros::Subscriber state_sub = nh.subscribe("ekf_localization/odom",
             QUEUE_SIZE, stateCallback);
