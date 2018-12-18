@@ -12,6 +12,7 @@
 #include "ros/ros.h"
 #include "ackermann_msgs/AckermannDriveStamped.h"
 #include "nav_msgs/Odometry.h"
+#include "tf/transform_datatypes.h"
 
 #include "aa_monitor/utils/utils.h"
 
@@ -233,7 +234,7 @@ void stateCallback(const state_t::ConstPtr& msg) {
     double x = msg->pose.pose.position.x;
     double y = msg->pose.pose.position.y;
     double z = msg->pose.pose.position.z;
-    // TODO: calculate yaw
+    double yaw = tf::getYaw(msg->pose.pose.orientation);
     double x_dot = msg->twist.twist.linear.x;
     double y_dot = msg->twist.twist.linear.y;
     double yaw_dot = msg->twist.twist.angular.z;
