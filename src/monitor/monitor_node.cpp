@@ -40,6 +40,11 @@ const size_t QUEUE_SIZE = 1;
 // Publisher with safe actions
 static ros::Publisher safe_action_pub;
 
+// Save subscribed messages for processing later
+static double current_state_timestamp = -1;
+static std::vector<double> current_state;
+static std::vector<double> proposed_action;
+
 /* CSV format:
 OLD:
 5 consts:  A B cirTol dirTol xTol yTol
@@ -107,15 +112,19 @@ void ffisense(int32_t *c, long clen, int32_t *a, long alen) {
     assert(clen == 0);
     assert(alen == 4 * 4);
 
- /*
-  * Insert code for computing the current sensor values here
-  */
+    // Wait (sleep) if new sensor readings have not come in
+    //      Can use header time stamps or seq number
+    std::vector<double> converted_state;
+    convertState(current_state, converted_state);
+    a[0] = converted_state[0];
+    a[1] = converted_state[1];
+    a[2] = converted_state[2];
+    a[3] = converted_state[3];
 
-    // Set the current sensor values
-    a[0] = 0; // sets t
-    a[1] = 1; // sets v
-    a[2] = 0; // sets xg
-    a[3] = 100; // sets yg
+    //a[0] = 0; // sets t
+    //a[1] = 1; // sets v
+    //a[2] = 0; // sets xg
+    //a[3] = 100; // sets yg
     printSensors(a[0],a[1],a[2],a[3]);
     // printf("SENSE: dx=%d, dy=%d, v=%d, xg=%d, yg=%d\n",a[0],a[1],a[2],a[3],a[4]);
 }
@@ -141,15 +150,28 @@ void ffiextCtrl(int32_t *c, long clen, int32_t *a, long alen) {
  /*
   * Insert code for computing the (unverified) control values here
   */
+    // reading from aa_monitor subscriptions here
+    // 1) read from aa_monitor/action here
+    // 2) convert actions to Brandon's form
+    // 3) Set control values as below
+    std::vector<double> converted_action;
+    convertAction(proposed_action, converted_action);
+    a[0] = converted_action[0];
+    a[1] = converted_action[1];
+    a[2] = converted_action[2];
+    a[3] = converted_action[3];
+    a[4] = converted_action[4];
+    a[5] = converted_action[5];
+    a[6] = converted_action[6];
 
     // Set the control values
-    a[0] = 1; // sets a
-    a[1] = 0;   // sets k
-    a[2] = 0; // sets t
-    a[3] = 0;  // sets vh
-    a[4] = 100;  // sets vl
-    a[5] = 0; // sets xg
-    a[6] = 100; // sets yg
+    //a[0] = 1; // sets a
+    //a[1] = 0;   // sets k
+    //a[2] = 0; // sets t
+    //a[3] = 0;  // sets vh
+    //a[4] = 100;  // sets vl
+    //a[5] = 0; // sets xg
+    //a[6] = 100; // sets yg
     printCtrl(a[0],a[1],a[2],a[3],a[4],a[5],a[6]);
     //  printf("extCtl: a=%d, dx=%d, dy=%d, w=%d, xg=%d, yg=%d\n",a[0],a[1],a[2],a[3],a[4],a[5]);
 }
@@ -182,9 +204,11 @@ void ffiactuate(char *c, long clen, int32_t *a, long alen) {
         assert(false);
     }
 
- /*
-  * Insert code for actuating the controls
-  */
+    // publish to commands/keyboard
+    action_t new_action;
+    new_action.drive.speed = proposed_action[0];
+    new_action.drive.steering_angle = proposed_action[1];
+    safe_action_pub.publish(new_action);
 }
 
 void ffistop(int32_t *c, long clen, int8_t *a, long alen) {
@@ -231,18 +255,21 @@ void cml_exit(void) {
 /**************************/
 
 void stateCallback(const state_t::ConstPtr& msg) {
-    double x = msg->pose.pose.position.x;
-    double y = msg->pose.pose.position.y;
-    double z = msg->pose.pose.position.z;
-    double yaw = tf::getYaw(msg->pose.pose.orientation);
-    double x_dot = msg->twist.twist.linear.x;
-    double y_dot = msg->twist.twist.linear.y;
-    double yaw_dot = msg->twist.twist.angular.z;
+    current_state.clear();
+    current_state.push_back(msg->pose.pose.position.x);
+    current_state.push_back(msg->pose.pose.position.y);
+    current_state.push_back(msg->pose.pose.position.z);
+    current_state.push_back(tf::getYaw(msg->pose.pose.orientation));
+    current_state.push_back(msg->twist.twist.linear.x);
+    current_state.push_back(msg->twist.twist.linear.y);
+    current_state.push_back(msg->twist.twist.angular.z);
+    current_state_timestamp = msg->header.stamp.toSec();
 }
 
 void actionCallback(const action_t::ConstPtr& msg) {
-    double speed = msg->drive.speed;
-    double steering_angle = msg->drive.steering_angle;
+    proposed_action.clear();
+    proposed_action.push_back(msg->drive.speed);
+    proposed_action.push_back(msg->drive.steering_angle);
 }
 
 int main (int argc, char **argv) {
